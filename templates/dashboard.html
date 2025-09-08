@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dashboard | Crypto Signal Engine</title>
+    <link rel="stylesheet" href="/static/style.css?{{ asset_version|default('v0') }}" />
+    <style>
+        .topbar-dash {display:flex; gap:1rem; align-items:center; padding:.8rem 1rem; background:#1d232a; border-bottom:1px solid #2a323c;}
+        .topbar-dash h2 {margin:0; font-size:1rem;}
+        .stats-line {font-size:.6rem; color:#94a3b8; margin-left:auto;}
+        .cards-wrap {padding:1rem;}
+    </style>
+</head>
+<body>
+    <div class="topbar-dash">
+        <h2>📊 Dashboard</h2>
+        <div class="stats-line" id="statsLine">Yükleniyor...</div>
+        <a href="/" style="font-size:.65rem; color:#4ade80; text-decoration:none;">← Ana Sayfa</a>
+    </div>
+    <div class="cards-wrap">
+    <h3 style="margin:.2rem 0 .6rem;font-size:.75rem;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;display:flex;align-items:center;gap:.75rem;">Öncelikli Pariteler <span style='font-size:.6rem;color:#64748b;font-weight:400;'>Canlı fiyat & 24h değişim</span></h3>
+    <div id="pinned" class="cards-grid pinned-grid"></div>
+        <h3 style="margin:1.2rem 0 .6rem;font-size:.72rem;letter-spacing:1px;color:#64748b;text-transform:uppercase;">Canlı Sinyaller</h3>
+        <div id="cards" class="cards-grid"></div>
+    </div>
+    <script>
+        const cardsRoot = document.getElementById('cards');
+        const pinnedRoot = document.getElementById('pinned');
+        const statsLine = document.getElementById('statsLine');
+        const maxCards = 300;
+        const PINNED = ['BTC-USDT','ETH-USDT','SOL-USDT'];
+        const pinnedState = {}; // symbol -> element
+        const seenSignals = new Set(); // duplicate önleme (symbol|ts)
+
+        function fmtDyn(p){
+            if(p >= 1000) return p.toFixed(2);
+            if(p >= 100) return p.toFixed(2);
+            if(p >= 10) return p.toFixed(3);
+            if(p >= 1) return p.toFixed(4);
+            if(p >= 0.1) return p.toFixed(5);
+            if(p >= 0.01) return p.toFixed(6);
+            return p.toFixed(7);
+        }
+
+        function fmtPct(v){
+            if(v===null||v===undefined) return '-';
+            const p=(v*100).toFixed(2);
+            return (v>0?'+':'')+p+'%';
+        }
+
+        function compact(n){
+            if(!n) return '-';
+            if(n>1e9) return (n/1e9).toFixed(2)+'B';
+            if(n>1e6) return (n/1e6).toFixed(2)+'M';
+            if(n>1e3) return (n/1e3).toFixed(2)+'K';
+            return n.toFixed(0);
+        }
+
+    function createPinnedSkeleton(sym){
+            const div = document.createElement('div');
+            div.className = 'signal-card pinned';
+            div.dataset.symbol = sym;
+            div.innerHTML = `
+                <div class='card-header'>
+                    <span class='sym'>${sym}</span>
+                    <span class='side neutral'>-</span>
+                    <span class='score'>S:-</span>
+                </div>
+                <div class='metrics-row' style='display:flex;gap:.4rem;font-size:.55rem;flex-wrap:wrap;'>
+                    <span class='price' style='color:#e2e8f0;'>₿ -</span>
+                    <span class='chg neutral'>Δ -</span>
+                    <span class='vol' style='opacity:.8;'>Vol -</span>
+                </div>
+                <canvas class='spark' height='30' style='width:100%;height:30px;'></canvas>
+                <div class='levels'>
+                    <div><label>Entry</label><b>-</b></div>
+                    <div><label>SL</label><b>-</b></div>
+                    <div><label>TP1</label><b>-</b></div>
+                    <div><label>TP2</label><b>-</b></div>
+                    <div><label>TP3</label><b>-</b></div>
+                </div>
+                <div class='meta'><span>Bekleniyor...</span><span>-</span></div>
+                <div class='reason'>Henüz sinyal yok</div>`;
+            pinnedRoot.appendChild(div);
+            pinnedState[sym] = div;
+        }
+
+        PINNED.forEach(createPinnedSkeleton);
+
+    function pct(x){ if(x==null) return '-'; return (x*100).toFixed(1)+'%'; }
+
+    function updatePinned(sig){
+            const el = pinnedState[sig.symbol];
+            if(!el) return false;
+            el.className = 'signal-card pinned '+sig.side;
+            el.querySelector('.side').textContent = sig.side;
+            el.querySelector('.side').className = 'side '+sig.side;
+            el.querySelector('.score').textContent = 'S:'+parseInt(sig.score);
+            const levelBoxes = el.querySelectorAll('.levels div b');
+            levelBoxes[0].textContent = sig.entry.toFixed(6);
+            levelBoxes[1].textContent = sig.sl.toFixed(6);
+            levelBoxes[2].textContent = sig.tp1.toFixed(6);
+            levelBoxes[3].textContent = sig.tp2.toFixed(6);
+            levelBoxes[4].textContent = sig.tp3.toFixed(6);
+            const dt = new Date(sig.ts*1000).toLocaleTimeString();
+            const metaSpans = el.querySelectorAll('.meta span');
+            if(metaSpans.length>=2){
+                metaSpans[0].textContent = sig.regime;
+                metaSpans[1].textContent = dt;
+            }
+            const reasonDiv = el.querySelector('.reason');
+            reasonDiv.textContent = sig.reason;
+            reasonDiv.title = sig.reason;
+            // Probability badge ekle (yoksa)
+            if(sig.prob != null){
+                let badge = el.querySelector('.prob');
+                if(!badge){
+                    badge = document.createElement('div');
+                    badge.className='prob';
+                    badge.style.cssText='position:absolute;top:6px;right:6px;font-size:.55rem;padding:2px 6px;border-radius:14px;background:#27313d;color:#93c5fd;font-weight:500;';
+                    el.appendChild(badge);
+                }
+                badge.textContent='P:'+pct(sig.prob);
+            }
+            return true;
+        }
+
+    function addCard(sig){
+        const key = sig.symbol + '|' + sig.ts;
+        if(seenSignals.has(key)) return; // duplicate engelle
+        seenSignals.add(key);
+            // Öncelikli kart ise güncelle ve çık
+            if(updatePinned(sig)) return;
+            const dt = new Date(sig.ts*1000).toLocaleTimeString();
+            const div = document.createElement('div');
+        div.className = 'signal-card '+sig.side+' new';
+            const probBadge = sig.prob!=null?`<span class='prob-badge'>P:${pct(sig.prob)}</span>`:'';
+            div.innerHTML = `
+                <div class='card-header'>
+                    <span class='sym'>${sig.symbol}</span>
+                    <span class='side ${sig.side}' title='Yön'>${sig.side}</span>
+                    <span class='score' title='Skor'>S:${parseInt(sig.score)}</span>
+                    ${probBadge}
+                </div>
+                <div class='levels'>
+            <div><label>Entry</label><b>${fmtDyn(sig.entry)}</b></div>
+            <div><label>SL</label><b>${fmtDyn(sig.sl)}</b></div>
+            <div><label>TP1</label><b>${fmtDyn(sig.tp1)}</b></div>
+            <div><label>TP2</label><b>${fmtDyn(sig.tp2)}</b></div>
+            <div><label>TP3</label><b>${fmtDyn(sig.tp3)}</b></div>
+                </div>
+                <div class='meta'>
+                    <span>${sig.regime}</span><span>${dt}</span>
+                </div>
+                <div class='reason' title='${sig.reason}'>${sig.reason}</div>`;
+            cardsRoot.prepend(div);
+            while(cardsRoot.children.length>maxCards){cardsRoot.removeChild(cardsRoot.lastChild);}
+        setTimeout(()=>div.classList.remove('new'),1200);
+        }
+
+        async function bootstrap(){
+            await refreshPinnedMetrics(); // artık sinyalleri websocket bootstrap'tan alıyoruz (duplicate yok)
+        }
+
+        async function refreshPinnedMetrics(){
+            try {
+                const r = await fetch('/api/pinned');
+                const j = await r.json();
+                (j.data||[]).forEach(row => {
+                    const el = pinnedState[row.symbol];
+                    if(!el) return;
+                    const priceEl = el.querySelector('.price');
+                    const chgEl = el.querySelector('.chg');
+                    const volEl = el.querySelector('.vol');
+                    if(priceEl) priceEl.textContent = row.price ? '$'+Number(row.price).toFixed(2) : '-';
+                    if(chgEl){
+                        const v=row.changeRate; // already fraction
+                        chgEl.textContent = 'Δ '+fmtPct(v);
+                        chgEl.className = 'chg '+(v>0?'pos':v<0?'neg':'neutral');
+                    }
+                    if(volEl) volEl.textContent = 'Vol '+(row.volValue?compact(row.volValue):'-');
+                    // sparkline update (kaydırmalı mini seri)
+                    const canvas = el.querySelector('canvas.spark');
+                    if(canvas && row.price){
+                        const arr = canvas._data || [];
+                        arr.push(row.price);
+                        if(arr.length>40) arr.shift();
+                        canvas._data = arr;
+                        drawSpark(canvas, arr);
+                    }
+                });
+            } catch(e){ console.warn('Pinned metrics error', e); }
+        }
+        setInterval(refreshPinnedMetrics, 15000);
+
+        async function refreshStats(){
+            const r = await fetch('/api/stats');
+            const j = await r.json();
+            statsLine.textContent = `Sembol:${j.symbols_scanned} Mode:${j.mode} Sleep:${j.sleep}s`;
+        }
+        setInterval(refreshStats, 10000);
+
+        function connect(){
+            const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/signals');
+            ws.onmessage = ev => {
+                const msg = JSON.parse(ev.data);
+                if(msg.type==='bootstrap') {
+                    msg.data.forEach(addCard);
+                } else if(msg.type==='signal') {
+                    addCard(msg.data);
+                }
+            };
+            ws.onclose = ()=>setTimeout(connect, 3000);
+        }
+
+        bootstrap();
+        refreshStats();
+        connect();
+
+        function drawSpark(cv, data){
+            const ctx = cv.getContext('2d');
+            const w = cv.width = cv.clientWidth;
+            const h = cv.height = cv.clientHeight;
+            ctx.clearRect(0,0,w,h);
+            if(data.length<2) return;
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = (max-min)||1;
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            data.forEach((v,i)=>{
+                const x = i/(data.length-1)*w;
+                const y = h - ( (v-min)/range * h );
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            });
+            ctx.stroke();
+            // gradient fill
+            const grd = ctx.createLinearGradient(0,0,0,h);
+            grd.addColorStop(0,'#3b82f680');
+            grd.addColorStop(1,'#3b82f600');
+            ctx.fillStyle = grd;
+            ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fill();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+fastapi==0.111.0
+uvicorn==0.30.3
+kucoin-python
+pandas
+numpy
+flask
