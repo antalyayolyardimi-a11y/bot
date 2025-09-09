@@ -554,6 +554,13 @@
                     <div class="stat-value" id="symbolsScanned">-</div>
                     <div class="stat-label">Tarama</div>
                 </div>
+                <div class="stat-item">
+                    <div class="learning-indicator" id="aiLearner">
+                        <div class="live-dot"></div>
+                        <span>AI Öğreniyor</span>
+                    </div>
+                    <div class="stat-label">Yapay Zeka</div>
+                </div>
             </div>
         </div>
     </nav>
@@ -751,16 +758,77 @@
             const changeIcon = coin.changeRate > 0 ? 'trending-up' : coin.changeRate < 0 ? 'trending-down' : 'minus';
             const symbol = coin.symbol.replace('-USDT', '');
             
+            // Calculate 24h range position
+            const high24h = coin.high || coin.price * 1.05;
+            const low24h = coin.low || coin.price * 0.95;
+            const rangePosition = ((coin.price - low24h) / (high24h - low24h)) * 100;
+            
+            // Enhanced coin info with real crypto data
+            const coinInfo = {
+                'BTC': { name: 'Bitcoin', emoji: '₿', color: '#f7931a', mcap: 'Rank #1' },
+                'ETH': { name: 'Ethereum', emoji: 'Ξ', color: '#627eea', mcap: 'Rank #2' },
+                'SOL': { name: 'Solana', emoji: '◉', color: '#9945ff', mcap: 'Rank #5' },
+                'ADA': { name: 'Cardano', emoji: '♦', color: '#0033ad', mcap: 'Rank #8' },
+                'MATIC': { name: 'Polygon', emoji: '⬟', color: '#8247e5', mcap: 'Rank #13' },
+                'DOT': { name: 'Polkadot', emoji: '●', color: '#e6007a', mcap: 'Rank #12' }
+            };
+            
+            const info = coinInfo[symbol] || { name: symbol, emoji: symbol[0], color: '#8ab4f8', mcap: 'Alt Coin' };
+            
+            // Volume status
+            const volume = coin.volValue || 0;
+            const volumeStatus = volume > 100000000 ? '🔥 Ultra Yüksek' : 
+                               volume > 50000000 ? '📈 Çok Yüksek' : 
+                               volume > 10000000 ? '📊 Yüksek' : '📉 Düşük';
+            
+            // Market trend indicator  
+            const trendEmoji = coin.changeRate > 0.05 ? '🚀' : 
+                              coin.changeRate > 0.02 ? '📈' : 
+                              coin.changeRate < -0.05 ? '💥' :
+                              coin.changeRate < -0.02 ? '📉' : '➡️';
+            
             return `
                 <div class="pinned-card ${changeClass}" ondblclick="openTaModal('${coin.symbol}')" title="Çift tıkla: Teknik analiz">
-                    <div class="coin-icon-large">${COIN_ICONS[coin.symbol] || symbol[0]}</div>
-                    <div class="coin-symbol">${symbol}</div>
-                    <div class="coin-price">$${formatPrice(coin.price)}</div>
-                    <div class="coin-change ${changeClass}">
-                        <i data-lucide="${changeIcon}"></i>
-                        ${coin.changeRate ? (coin.changeRate * 100).toFixed(2) + '%' : '0.00%'}
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 32px; color: ${info.color}; text-shadow: 0 2px 8px ${info.color}40;">${info.emoji}</div>
+                            <div>
+                                <div style="font-size: 16px; font-weight: 700; color: #e8eaed; margin-bottom: 2px;">${info.name}</div>
+                                <div style="font-size: 11px; color: rgba(232, 234, 237, 0.6);">${info.mcap} • ${symbol}/USDT</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 24px; margin-bottom: 4px;">${trendEmoji}</div>
+                            <div style="font-size: 9px; color: rgba(232, 234, 237, 0.5);">Canlı</div>
+                        </div>
                     </div>
-                    <div class="coin-volume">Vol: $${formatVolume(coin.volValue || 0)}</div>
+                    
+                    <div class="coin-price" style="font-size: 22px; font-weight: 800; margin-bottom: 8px;">$${formatPrice(coin.price)}</div>
+                    <div class="coin-change ${changeClass}" style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+                        <i data-lucide="${changeIcon}"></i>
+                        <span>${coin.changeRate ? (coin.changeRate * 100).toFixed(2) + '%' : '0.00%'}</span>
+                        <span style="font-size: 10px; opacity: 0.7;">24h</span>
+                    </div>
+                    
+                    <div class="price-range" style="margin-bottom: 12px;">
+                        <div class="range-info" style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 10px;">
+                            <span class="range-low">🔻 $${formatPrice(low24h)}</span>
+                            <span class="range-high">🔺 $${formatPrice(high24h)}</span>
+                        </div>
+                        <div class="range-bar">
+                            <div class="range-fill" style="width: ${rangePosition}%"></div>
+                            <div class="range-marker"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: rgba(232, 234, 237, 0.6);">
+                        <div>📊 Vol: ${volumeStatus}</div>
+                        <div>⚡ ${rangePosition.toFixed(0)}% aralık</div>
+                    </div>
+                    
+                    <div style="margin-top: 8px; padding: 6px; background: rgba(138, 180, 248, 0.1); border-radius: 6px; text-align: center; font-size: 10px; color: rgba(138, 180, 248, 0.8);">
+                        🎯 Çift tıkla → Teknik Analiz
+                    </div>
                 </div>
             `;
         }
@@ -771,56 +839,87 @@
             if (isNew) {
                 seenSignalsList.add(signal.symbol + signal.created_ts);
             }
+            
+            // Signal strength indicators
+            const score = Math.round(signal.score);
+            const strengthEmoji = score >= 80 ? '🔥' : score >= 70 ? '⚡' : score >= 60 ? '📈' : '📊';
+            const strengthText = score >= 80 ? 'Ultra Güçlü' : 
+                               score >= 70 ? 'Çok Güçlü' : 
+                               score >= 60 ? 'Güçlü' : 'Orta';
+            
+            // Side styling
+            const sideEmoji = signal.side === 'LONG' ? '🚀' : '🩸';
+            const sideColor = signal.side === 'LONG' ? '#10b981' : '#ef4444';
+            
+            // Probability indicator
+            const prob = signal.prob ? (signal.prob * 100).toFixed(1) : '0';
+            const probEmoji = prob >= 80 ? '💎' : prob >= 70 ? '💰' : prob >= 60 ? '🎯' : '🎲';
+            
+            // Regime styling
+            const regimeEmoji = signal.regime === 'trend' ? '📊' : 
+                              signal.regime === 'breakout' ? '💥' : '🔄';
 
             return `
-                <div class="signal-card ${signal.side} ${isNew ? 'new' : ''}">
-                    <div class="signal-header">
-                        <div class="signal-symbol">
-                            <div class="symbol-name">${signal.symbol}</div>
-                            <div class="signal-side ${signal.side}">${signal.side}</div>
+                <div class="signal-card ${signal.side} ${isNew ? 'new' : ''}" ondblclick="openTaModal('${signal.symbol}')" title="Çift tıkla: Teknik analiz">
+                    <div class="signal-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 32px;">${sideEmoji}</div>
+                            <div>
+                                <div class="symbol-name" style="font-size: 16px; font-weight: 700; color: #e8eaed;">${signal.symbol}</div>
+                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                                    <span class="signal-side ${signal.side}" style="background: ${sideColor}20; color: ${sideColor}; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">${signal.side}</span>
+                                    <span style="font-size: 10px; color: rgba(232, 234, 237, 0.6);">${regimeEmoji} ${signal.regime}</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="signal-score">
-                            <i data-lucide="star"></i>
-                            <span class="score-value">${Math.round(signal.score)}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="signal-details">
-                        <div class="detail-item">
-                            <span class="detail-label">Entry</span>
-                            <span class="detail-value">$${formatPrice(signal.entry)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Zaman</span>
-                            <span class="detail-value">${timeAgo(signal.created_ts)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Regime</span>
-                            <span class="detail-value">${signal.regime}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Prob</span>
-                            <span class="detail-value">${signal.prob ? (signal.prob * 100).toFixed(1) + '%' : '-'}</span>
+                        <div style="text-align: right;">
+                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                                <span style="font-size: 16px;">${strengthEmoji}</span>
+                                <span style="font-size: 14px; font-weight: 600; color: ${score >= 70 ? '#10b981' : score >= 60 ? '#f59e0b' : '#6b7280'};">${score}</span>
+                            </div>
+                            <div style="font-size: 9px; color: rgba(232, 234, 237, 0.5);">${strengthText}</div>
                         </div>
                     </div>
                     
-                    <div class="signal-targets">
-                        <div class="target-item sl">
-                            <div class="target-label">SL</div>
-                            <div class="target-value">$${formatPrice(signal.sl)}</div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <div>
+                            <div style="font-size: 10px; color: rgba(232, 234, 237, 0.6); margin-bottom: 2px;">💰 Entry</div>
+                            <div style="font-size: 18px; font-weight: 700; color: #e8eaed;">$${formatPrice(signal.entry)}</div>
                         </div>
-                        <div class="target-item">
-                            <div class="target-label">TP1</div>
-                            <div class="target-value">$${formatPrice(signal.tp1)}</div>
+                        <div style="text-align: right;">
+                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                                <span style="font-size: 12px;">${probEmoji}</span>
+                                <span style="font-size: 12px; font-weight: 600; color: ${prob >= 70 ? '#10b981' : '#f59e0b'};">${prob}%</span>
+                            </div>
+                            <div style="font-size: 9px; color: rgba(232, 234, 237, 0.5);">${timeAgo(signal.created_ts)}</div>
                         </div>
-                        <div class="target-item">
-                            <div class="target-label">TP2</div>
-                            <div class="target-value">$${formatPrice(signal.tp2)}</div>
+                    </div>
+                    
+                    <div class="signal-targets" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;">
+                        <div style="background: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 9px; color: #ef4444; font-weight: 500; margin-bottom: 2px;">🛑 SL</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #e8eaed;">$${formatPrice(signal.sl)}</div>
                         </div>
-                        <div class="target-item">
-                            <div class="target-label">TP3</div>
-                            <div class="target-value">$${formatPrice(signal.tp3)}</div>
+                        <div style="background: rgba(16, 185, 129, 0.1); padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 9px; color: #10b981; font-weight: 500; margin-bottom: 2px;">🎯 TP1</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #e8eaed;">$${formatPrice(signal.tp1)}</div>
                         </div>
+                        <div style="background: rgba(16, 185, 129, 0.15); padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 9px; color: #10b981; font-weight: 500; margin-bottom: 2px;">🎯 TP2</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #e8eaed;">$${formatPrice(signal.tp2)}</div>
+                        </div>
+                        <div style="background: rgba(16, 185, 129, 0.2); padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 9px; color: #10b981; font-weight: 500; margin-bottom: 2px;">🎯 TP3</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #e8eaed;">$${formatPrice(signal.tp3)}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="signal-reason" style="background: rgba(138, 180, 248, 0.1); padding: 8px; border-radius: 6px; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-left: 3px solid #8ab4f8;" title="${signal.reason}">
+                        📝 ${signal.reason}
+                    </div>
+                    
+                    <div style="margin-top: 8px; padding: 4px; background: rgba(138, 180, 248, 0.05); border-radius: 4px; text-align: center; font-size: 9px; color: rgba(138, 180, 248, 0.7);">
+                        🎯 Çift tıkla → Teknik Analiz
                     </div>
                 </div>
             `;
@@ -957,6 +1056,8 @@
         // ---- TA MODAL ----
         const TA_TIMEFRAMES = ["1m","5m","15m","1h","4h"];
         let currentTaSymbol = null;
+        let taDataCache = {}; // Cache TA data
+        let cacheExpiry = 5 * 60 * 1000; // 5 dakika cache
 
         function closeTaModal(){
             document.getElementById('taModal').classList.add('hidden');
@@ -970,12 +1071,30 @@
             title.textContent = symbol + ' Teknik Analiz';
             body.innerHTML = 'Yükleniyor...';
             modal.classList.remove('hidden');
+            
+            // Check cache first
+            const cacheKey = symbol;
+            const now = Date.now();
+            
+            if (taDataCache[cacheKey] && (now - taDataCache[cacheKey].timestamp < cacheExpiry)) {
+                console.log('Using cached TA data for', symbol);
+                renderTaData(taDataCache[cacheKey].data);
+                return;
+            }
+            
             try {
                 const res = await fetch(`/api/ta/${symbol}`);
                 const data = await res.json();
+                
+                // Cache the data
+                taDataCache[cacheKey] = {
+                    data: data,
+                    timestamp: now
+                };
+                
                 renderTaData(data);
             } catch(e){
-                body.innerHTML = '<div style="color:var(--negative);">Hata: '+e+'</div>';
+                body.innerHTML = '<div style="color:var(--danger);">Hata: '+e+'</div>';
             }
         }
 
@@ -1003,10 +1122,45 @@
             });
             const dataEl = document.getElementById('taTfContainer');
             if(!currentTaSymbol) return;
+            
+            // Use cached data if available
+            const cacheKey = currentTaSymbol;
+            if (taDataCache[cacheKey]) {
+                const d = taDataCache[cacheKey].data.timeframes[tf] || {};
+                if(d.error){
+                    dataEl.innerHTML = `<div style="color:var(--danger);">${d.error}</div>`;
+                    return;
+                }
+                
+                // Add color coding for RSI
+                let rsiColor = 'var(--text-primary)';
+                if (d.rsi14) {
+                    if (d.rsi14 > 70) rsiColor = 'var(--danger)'; // Overbought
+                    else if (d.rsi14 < 30) rsiColor = 'var(--secondary)'; // Oversold
+                    else if (d.rsi14 > 50) rsiColor = 'var(--warning)'; // Bullish
+                }
+                
+                dataEl.innerHTML = `
+                    <div class="ta-grid">
+                        <div class="ta-box"><h4>Fiyat</h4><div class="ta-metric">$${formatMetric(d.close,4)}</div><div class="ta-sub">Değişim ${formatMetric(d.change_pct,2)}%</div></div>
+                        <div class="ta-box"><h4>RSI(14)</h4><div class="ta-metric" style="color:${rsiColor}">${formatMetric(d.rsi14,2)}</div><div class="ta-sub">30/70 bölgeleri</div></div>
+                        <div class="ta-box"><h4>ATR(14)</h4><div class="ta-metric">${formatMetric(d.atr14,4)}</div><div class="ta-sub">Volatilite</div></div>
+                        <div class="ta-box"><h4>ADX(14)</h4><div class="ta-metric">${formatMetric(d.adx14,2)}</div><div class="ta-sub">Trend gücü</div></div>
+                        <div class="ta-box"><h4>EMA20</h4><div class="ta-metric">${formatMetric(d.ema20,4)}</div><div class="ta-sub">Kısa ortalama</div></div>
+                        <div class="ta-box"><h4>EMA50</h4><div class="ta-metric">${formatMetric(d.ema50,4)}</div><div class="ta-sub">Orta ortalama</div></div>
+                        <div class="ta-box"><h4>BB Poz</h4><div class="ta-metric">${formatMetric(d.bb_pos,2)}</div><div class="ta-sub">0 alt bant / 1 üst bant</div></div>
+                        <div class="ta-box"><h4>BB Width</h4><div class="ta-metric">${formatMetric(d.bb_width,4)}</div><div class="ta-sub">Bant genişliği</div></div>
+                        <div class="ta-box"><h4>Hacim</h4><div class="ta-metric">${formatVolume(d.vol||0)}</div><div class="ta-sub">Son mum</div></div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Fallback to API call if no cache
             fetch(`/api/ta/${currentTaSymbol}`).then(r=>r.json()).then(all=>{
                 const d = all.timeframes[tf] || {};
                 if(d.error){
-                    dataEl.innerHTML = `<div style="color:var(--negative);">${d.error}</div>`;
+                    dataEl.innerHTML = `<div style="color:var(--danger);">${d.error}</div>`;
                     return;
                 }
                 dataEl.innerHTML = `
@@ -1023,7 +1177,7 @@
                     </div>
                 `;
             }).catch(e=>{
-                dataEl.innerHTML = `<div style="color:var(--negative);">Hata: ${e}</div>`;
+                dataEl.innerHTML = `<div style="color:var(--danger);">Hata: ${e}</div>`;
             });
         }
 

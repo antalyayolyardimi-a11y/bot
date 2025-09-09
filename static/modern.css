@@ -962,3 +962,161 @@ body {
 .glow-red {
     box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
 }
+
+/* Enhanced Pinned Cards */
+.coin-dominance {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: var(--space-1);
+    font-style: italic;
+}
+
+.price-range {
+    margin: var(--space-3) 0;
+    padding: var(--space-2);
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+.range-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+    font-size: 0.8rem;
+}
+
+.range-low {
+    color: var(--danger);
+}
+
+.range-high {
+    color: var(--secondary);
+}
+
+.range-bar {
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.range-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--danger) 0%, var(--warning) 50%, var(--secondary) 100%);
+    transition: width 0.5s ease;
+}
+
+        .range-marker {
+            position: absolute;
+            top: -2px;
+            right: 0;
+            width: 2px;
+            height: 10px;
+            background: var(--text-primary);
+            border-radius: 1px;
+        }
+        
+        /* Signal Card Enhancements */
+        .signal-reason {
+            margin-top: var(--space-3);
+            padding: var(--space-2);
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-left: 3px solid var(--primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Enhanced Card Animations */
+        @keyframes newSignalGlow {
+            0% { box-shadow: 0 0 0 rgba(138, 180, 248, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(138, 180, 248, 0.8); }
+            100% { box-shadow: 0 0 0 rgba(138, 180, 248, 0.5); }
+        }
+        
+        .signal-card.new {
+            animation: newSignalGlow 2s ease-in-out;
+            border-color: rgba(138, 180, 248, 0.6);
+        }
+        
+        /* Status indicators improvements */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 2px 6px;
+            border-radius: 12px;
+            animation: pulse 2s infinite;
+        }
+        
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* Enhanced coin icons */
+        .crypto-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        }
+        
+        /* Performance indicators */
+        .performance-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        
+        .performance-badge.excellent { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .performance-badge.good { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .performance-badge.average { background: rgba(107, 114, 128, 0.2); color: #6b7280; }
+        
+        /* Learning indicator */
+        .learning-indicator {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #8ab4f8;
+            background: rgba(138, 180, 248, 0.1);
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid rgba(138, 180, 248, 0.2);
+        }
+        
+        .learning-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #8ab4f8;
+            border-radius: 50%;
+            animation: learningPulse 1s infinite alternate;
+        }
+        
+        @keyframes learningPulse {
+            0% { opacity: 0.3; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }

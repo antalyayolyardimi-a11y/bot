@@ -1,8 +1,7 @@
-"""Sinyal oluşturma stratejileri (basitleştirilmiş / ilk faz).
+"""Gelişmiş sinyal oluşturma stratejileri.
 
-README içindeki kapsamlı mantığın tamamı çok büyük olduğu için
-burada MVP odaklı: trend kırılımı + basit momentum + range bounce.
-Genişletme TODO: SMC, FVG, AI tuner, adaptif eşikler.
+Akıllı multi-timeframe analiz, momentum confirmation, 
+volatility filtering ve risk yönetimi.
 """
 from __future__ import annotations
 import math
@@ -41,99 +40,251 @@ def compute_sl_tp(side: str, entry: float, atrv: float):
         return sl, (entry - 1.0 * risk, entry - 1.6 * risk, entry - 2.2 * risk)
 
 
+def analyze_market_structure(df: pd.DataFrame) -> dict:
+    """Piyasa yapısını analiz et (trend, support/resistance)."""
+    close = df["c"]
+    high = df["h"] 
+    low = df["l"]
+    
+    # Trend analizi (EMA slopes)
+    ema9 = ema(close, 9)
+    ema21 = ema(close, 21)
+    ema50 = ema(close, 50)
+    
+    trend_strength = 0
+    if len(ema9) > 5:
+        ema9_slope = (ema9.iloc[-1] - ema9.iloc[-5]) / 5
+        ema21_slope = (ema21.iloc[-1] - ema21.iloc[-5]) / 5
+        
+        if ema9_slope > 0 and ema21_slope > 0 and ema9.iloc[-1] > ema21.iloc[-1]:
+            trend_strength = 1  # Bullish
+        elif ema9_slope < 0 and ema21_slope < 0 and ema9.iloc[-1] < ema21.iloc[-1]:
+            trend_strength = -1  # Bearish
+    
+    # Support/Resistance levels
+    recent_highs = high.tail(20).max()
+    recent_lows = low.tail(20).min()
+    
+    return {
+        "trend": trend_strength,
+        "resistance": recent_highs,
+        "support": recent_lows,
+        "ema9_slope": ema9_slope if len(ema9) > 5 else 0,
+        "ema21_slope": ema21_slope if len(ema9) > 5 else 0
+    }
+
+
+def calculate_momentum_score(df15: pd.DataFrame, df1h: pd.DataFrame) -> float:
+    """Multi-timeframe momentum skoru."""
+    score = 50
+    
+    # 15m momentum
+    rsi15 = rsi(df15["c"], 14).iloc[-1] if len(df15) > 14 else 50
+    adx15 = adx(df15["h"], df15["l"], df15["c"], 14).iloc[-1] if len(df15) > 20 else 20
+    
+    # 1h momentum  
+    rsi1h = rsi(df1h["c"], 14).iloc[-1] if len(df1h) > 14 else 50
+    adx1h = adx(df1h["h"], df1h["l"], df1h["c"], 14).iloc[-1] if len(df1h) > 20 else 20
+    
+    # RSI alignment bonus
+    if 30 < rsi15 < 70 and 30 < rsi1h < 70:  # Healthy range
+        score += 10
+    elif (rsi15 < 30 and rsi1h < 40) or (rsi15 > 70 and rsi1h > 60):  # Oversold/Overbought alignment
+        score += 5
+    
+    # ADX strength bonus
+    if adx15 > 25 and adx1h > 20:  # Strong trend
+        score += 15
+    elif adx15 > 20 or adx1h > 15:  # Moderate trend
+        score += 8
+    
+    # Volume confirmation
+    recent_vol = df15["v"].tail(5).mean()
+    avg_vol = df15["v"].tail(50).mean()
+    if recent_vol > avg_vol * 1.2:  # Volume spike
+        score += 12
+    elif recent_vol > avg_vol:
+        score += 6
+    
+    return min(100, max(0, score))
+
+
+def detect_smart_money_concepts(df: pd.DataFrame) -> dict:
+    """Smart Money Concepts benzeri analiz."""
+    close = df["c"]
+    high = df["h"]
+    low = df["l"]
+    
+    # Order Block detection (basit versiyon)
+    recent_candles = df.tail(10)
+    order_blocks = []
+    
+    for i in range(2, len(recent_candles)-1):
+        curr_high = recent_candles.iloc[i]["h"]
+        curr_low = recent_candles.iloc[i]["l"]
+        prev_close = recent_candles.iloc[i-1]["c"]
+        next_close = recent_candles.iloc[i+1]["c"]
+        
+        # Bullish Order Block
+        if (curr_low < prev_close and next_close > curr_high):
+            order_blocks.append({"type": "bullish", "low": curr_low, "high": curr_high})
+        
+        # Bearish Order Block  
+        elif (curr_high > prev_close and next_close < curr_low):
+            order_blocks.append({"type": "bearish", "low": curr_low, "high": curr_high})
+    
+    # Liquidity zones (recent highs/lows)
+    liquidity_high = high.tail(20).max()
+    liquidity_low = low.tail(20).min()
+    
+    return {
+        "order_blocks": order_blocks,
+        "liquidity_high": liquidity_high,
+        "liquidity_low": liquidity_low,
+        "current_price": close.iloc[-1]
+    }
+
+
 def pick_candidate(symbol: str, df15: pd.DataFrame, df1h: pd.DataFrame) -> Optional[Candidate]:
+    """Gelişmiş multi-timeframe sinyal analizi."""
     if df15 is None or len(df15) < 80 or df1h is None or len(df1h) < 60:
         return None
+    
     o, c, h, l, v = df15["o"], df15["c"], df15["h"], df15["l"], df15["v"]
     atrv = float(atr_wilder(h, l, c, 14).iloc[-1])
     close = float(c.iloc[-1])
 
-    # Ek kalite kontrolleri - düşük volatilite ve düşük hacmi filtrele
+    # Kalite kontrolleri - daha sıkı
     recent_volume_avg = float(v.tail(10).mean()) * close
-    if recent_volume_avg < 50000:  # 50K USDT'den az hacimli çiftleri filtrele
+    if recent_volume_avg < 100000:  # 100K USDT minimum
         return None
         
-    # ATR çok düşükse (low volatility) sinyal alma
-    if atrv / close < 0.005:  # %0.5'ten az volatilite varsa skip et
+    if atrv / close < 0.008:  # %0.8'den az volatilite varsa skip
         return None
 
-    # 1H bias (EMA50 eğimi)
-    e50 = ema(df1h["c"], 50)
-    bias = "NEUTRAL"
-    if pd.notna(e50.iloc[-1]) and pd.notna(e50.iloc[-2]):
-        if e50.iloc[-1] > e50.iloc[-2]:
-            bias = "LONG"
-        elif e50.iloc[-1] < e50.iloc[-2]:
-            bias = "SHORT"
-
-    # Bollinger & Donchian
-    ma, bb_u, bb_l, bwidth, _ = bollinger(c, 20, 2.0)
-    dc_hi, dc_lo = donchian(h, l, 20)
-    bw_last = float(bwidth.iloc[-1]) if pd.notna(bwidth.iloc[-1]) else math.nan
-    prev_close = float(c.iloc[-2])
-
-    adx1h = float(adx(df1h["h"], df1h["l"], df1h["c"], 14).iloc[-1])
-
+    # Market structure analysis
+    structure15 = analyze_market_structure(df15)
+    structure1h = analyze_market_structure(df1h)
+    
+    # Momentum scoring
+    momentum_score = calculate_momentum_score(df15, df1h)
+    
+    # Smart money concepts
+    smc_data = detect_smart_money_concepts(df15)
+    
+    # Teknik indikatörler
+    rsi_15 = rsi(c, 14).iloc[-1] if len(c) > 14 else 50
+    rsi_1h = rsi(df1h["c"], 14).iloc[-1] if len(df1h) > 14 else 50
+    
+    # Bollinger bands
+    ma, bb_u, bb_l, bwidth, std = bollinger(c, 20)
+    bb_position = (close - bb_l.iloc[-1]) / (bb_u.iloc[-1] - bb_l.iloc[-1]) if not pd.isna(bb_u.iloc[-1]) else 0.5
+    
     candidates: List[Candidate] = []
+    base_score = momentum_score
 
-    # Trend kırılımı
-    BREAK_BUFFER = 0.0008
-    if bias == "LONG":
-        dchi_prev = float(dc_hi.shift(1).iloc[-1])
-        if prev_close > dchi_prev * (1 + BREAK_BUFFER) and close >= prev_close:
-            bs = float(body_strength(o, c, h, l).iloc[-1])
-            sl, (tp1, tp2, tp3) = compute_sl_tp("LONG", close, atrv)
-            score = 60 + bs * 10 + max(0, (adx1h - 16))
-            candidates.append(Candidate(symbol, "LONG", close, sl, tp1, tp2, tp3, score, "TREND", "Trend kırılımı + momentum"))
-    elif bias == "SHORT":
-        dclo_prev = float(dc_lo.shift(1).iloc[-1])
-        if prev_close < dclo_prev * (1 - BREAK_BUFFER) and close <= prev_close:
-            bs = float(body_strength(o, c, h, l).iloc[-1])
-            sl, (tp1, tp2, tp3) = compute_sl_tp("SHORT", close, atrv)
-            score = 60 + bs * 10 + max(0, (adx1h - 16))
-            candidates.append(Candidate(symbol, "SHORT", close, sl, tp1, tp2, tp3, score, "TREND", "Trend kırılımı + momentum"))
-
-    # Range bounce (dar bant + re-enter)
-    if not math.isnan(bw_last) and bw_last <= 0.055:
-        rsi14 = float(rsi(c, 14).iloc[-1])
-        bbu = float(bb_u.iloc[-1]); bbl = float(bb_l.iloc[-1])
-        if close <= bbl * 1.001 and rsi14 < 38 and bias != "SHORT":
-            sl, (tp1, tp2, tp3) = compute_sl_tp("LONG", close, atrv)
-            score = 50 + (38 - rsi14) + (1 - bw_last / 0.055) * 10
-            candidates.append(Candidate(symbol, "LONG", close, sl, tp1, tp2, tp3, score, "RANGE", "Alt banda yakın bounce"))
-        if close >= bbu * 0.999 and rsi14 > 62 and bias != "LONG":
-            sl, (tp1, tp2, tp3) = compute_sl_tp("SHORT", close, atrv)
-            score = 50 + (rsi14 - 62) + (1 - bw_last / 0.055) * 10
-            candidates.append(Candidate(symbol, "SHORT", close, sl, tp1, tp2, tp3, score, "RANGE", "Üst banda yakın geri dönüş"))
-
-    if not candidates:
-        # TEST: Her 10 sembolden birinde test sinyali üret
-        if hash(symbol) % 10 == 0:  # Sembol bazlı rastgele test
-            sl, (tp1, tp2, tp3) = compute_sl_tp("LONG", close, atrv)
-            test_score = 47 + (hash(symbol) % 15)  # 47-62 arası rastgele skor
-            candidates.append(Candidate(symbol, "LONG", close, sl, tp1, tp2, tp3, test_score, "TEST", "Test sinyal - momentum koşulları"))
+    # LONG Sinyalleri
+    if structure15["trend"] >= 0 and structure1h["trend"] >= 0:  # Bullish alignment
+        long_reasons = []
+        long_score = base_score
         
+        # RSI oversold bounce
+        if 25 < rsi_15 < 35 and rsi_1h < 50:
+            long_reasons.append("RSI oversold bounce")
+            long_score += 15
+        
+        # Bollinger lower band bounce
+        if bb_position < 0.2:
+            long_reasons.append("BB lower band bounce") 
+            long_score += 12
+        
+        # Order block support
+        for ob in smc_data["order_blocks"]:
+            if ob["type"] == "bullish" and ob["low"] <= close <= ob["high"] * 1.02:
+                long_reasons.append("Bullish order block")
+                long_score += 20
+                break
+        
+        # EMA alignment bonus
+        if structure15["ema9_slope"] > 0 and structure1h["ema9_slope"] > 0:
+            long_reasons.append("EMA alignment")
+            long_score += 10
+        
+        # Volume confirmation
+        if v.iloc[-1] > v.tail(10).mean() * 1.3:
+            long_reasons.append("Volume spike")
+            long_score += 8
+        
+        if long_reasons and long_score >= 65:
+            sl, tps = compute_sl_tp("LONG", close, atrv)
+            candidates.append(Candidate(
+                symbol=symbol, side="LONG", entry=close, sl=sl,
+                tp1=tps[0], tp2=tps[1], tp3=tps[2],
+                score=long_score, regime="BULLISH",
+                reason=" + ".join(long_reasons)
+            ))
+
+    # SHORT Sinyalleri  
+    if structure15["trend"] <= 0 and structure1h["trend"] <= 0:  # Bearish alignment
+        short_reasons = []
+        short_score = base_score
+        
+        # RSI overbought rejection
+        if 65 < rsi_15 < 75 and rsi_1h > 50:
+            short_reasons.append("RSI overbought rejection")
+            short_score += 15
+        
+        # Bollinger upper band rejection
+        if bb_position > 0.8:
+            short_reasons.append("BB upper band rejection")
+            short_score += 12
+        
+        # Order block resistance  
+        for ob in smc_data["order_blocks"]:
+            if ob["type"] == "bearish" and ob["low"] * 0.98 <= close <= ob["high"]:
+                short_reasons.append("Bearish order block")
+                short_score += 20
+                break
+        
+        # EMA alignment bonus
+        if structure15["ema9_slope"] < 0 and structure1h["ema9_slope"] < 0:
+            short_reasons.append("EMA alignment")
+            short_score += 10
+            
+        # Volume confirmation
+        if v.iloc[-1] > v.tail(10).mean() * 1.3:
+            short_reasons.append("Volume spike")
+            short_score += 8
+        
+        if short_reasons and short_score >= 65:
+            sl, tps = compute_sl_tp("SHORT", close, atrv)
+            candidates.append(Candidate(
+                symbol=symbol, side="SHORT", entry=close, sl=sl,
+                tp1=tps[0], tp2=tps[1], tp3=tps[2],
+                score=short_score, regime="BEARISH", 
+                reason=" + ".join(short_reasons)
+            ))
+
     if not candidates:
         return None
-    # Öğrenici ile olasılık modülasyonu
+        
+    # AI learner probability modulation
     learner = get_global_learner()
     if learner:
-        boosted = []
-        for c in candidates:
-            feats = {
-                "score": c.score/100.0,
-                "side_long": 1.0 if c.side == "LONG" else 0.0,
-                "side_short": 1.0 if c.side == "SHORT" else 0.0,
-                f"reg_{c.regime.lower()}": 1.0,
+        for cand in candidates:
+            features = {
+                "score": cand.score / 100,
+                "rsi_15": rsi_15 / 100,
+                "rsi_1h": rsi_1h / 100,
+                "bb_pos": bb_position,
+                "trend_15": structure15["trend"],
+                "trend_1h": structure1h["trend"],
+                "vol_ratio": float(v.iloc[-1] / v.tail(20).mean()),
+                f"side_{cand.side}": 1.0
             }
-            p = learner.predict_proba(feats)
-            # Skoru hafifçe p ile çarp + ek bonus
-            adj_score = c.score * (0.85 + 0.3 * p)
-            boosted.append((adj_score, c, p))
-        boosted.sort(key=lambda x: x[0], reverse=True)
-        top_score, top_c, top_p = boosted[0]
-        top_c.score = top_score
-        top_c.prob = top_p
-        return top_c
+            cand.prob = learner.predict_proba(features)
+            # Probability ile score'u modüle et
+            cand.score = cand.score * (0.7 + 0.6 * cand.prob)
+
     candidates.sort(key=lambda x: x.score, reverse=True)
     return candidates[0]

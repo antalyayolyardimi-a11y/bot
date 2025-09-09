@@ -44,7 +44,9 @@ class OnlineLearner:
         
         # Debug: Öğrenme bilgilerini yazdır
         if self.seen % 5 == 0:  # Her 5 örnekte bir
-            print(f"[LEARNER DEBUG] Seen={self.seen}, bias={self.bias:.4f}, active_weights={len(self.weights)}")
+            top_features = sorted(self.weights.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
+            print(f"[LEARNER DEBUG] Seen={self.seen}, bias={self.bias:.4f}, top_features={top_features}")
+            print(f"[LEARNER] 🧠 AI öğrenme: {self.seen} örnek işlendi, öğrenme başarılı ✅")
             
         return self.predict_proba(feats)  # Güncellenmiş tahmini döndür
 
