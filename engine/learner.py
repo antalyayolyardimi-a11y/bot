@@ -38,9 +38,15 @@ class OnlineLearner:
             if k not in self.weights:
                 self.weights[k] = 0.0
             # L2 + gradient
+            old_w = self.weights[k]
             self.weights[k] = (self.weights[k] * (1 - self.lr * self.l2)) + self.lr * err * v
         self.seen += 1
-        return p
+        
+        # Debug: Öğrenme bilgilerini yazdır
+        if self.seen % 5 == 0:  # Her 5 örnekte bir
+            print(f"[LEARNER DEBUG] Seen={self.seen}, bias={self.bias:.4f}, active_weights={len(self.weights)}")
+            
+        return self.predict_proba(feats)  # Güncellenmiş tahmini döndür
 
     def serialize(self) -> Dict[str, float]:
         d = {"bias": round(self.bias, 6), "seen": self.seen}

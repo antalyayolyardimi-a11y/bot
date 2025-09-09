@@ -113,6 +113,8 @@ class SignalEngine:
                     return None
                 # Basit dinamik skor filtresi
                 if cand.score < self.min_score:
+                    if sent == 0:  # İlk birkaç düşük skorluda log
+                        self.log(f"{sym}: score {cand.score:.1f} < {self.min_score} (red)")
                     return None
                 payload = asdict(cand)
                 payload["ts"] = time.time()

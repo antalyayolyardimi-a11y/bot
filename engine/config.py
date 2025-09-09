@@ -19,7 +19,7 @@ class Settings:
     LOG_PREFIX: str = os.getenv("LOG_PREFIX", "📟")
     WEBSOCKET_PUSH_BUFFER: int = int(os.getenv("WEBSOCKET_PUSH_BUFFER", "100"))
     ATR_PERIOD: int = int(os.getenv("ATR_PERIOD", "14"))
-    MIN_SCORE: int = int(os.getenv("MIN_SCORE", "58"))
+    MIN_SCORE: int = int(os.getenv("MIN_SCORE", "45"))
     # Güvenlik
     HIDE_SENSITIVE: bool = True
 

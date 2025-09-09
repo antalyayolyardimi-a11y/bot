@@ -379,125 +379,9 @@
             color: var(--text-muted);
         }
         
-        /* Pinned Cards Styles */
-        .pinned-section {
-            margin-bottom: var(--space-8);
-        }
-        
-        .pinned-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--space-6);
-            margin-bottom: var(--space-8);
-        }
-        
-        .pinned-card {
-            background: var(--gradient-dark);
-            border: 2px dashed rgba(99, 102, 241, 0.3);
-            border-radius: 20px;
-            padding: var(--space-6);
-            text-align: center;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .pinned-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--gradient-primary);
-            transform: scaleX(0);
-            transition: transform 0.3s ease;
-        }
-        
-        .pinned-card:hover::before {
-            transform: scaleX(1);
-        }
-        
-        .pinned-card:hover {
-            transform: translateY(-5px);
-            border-color: rgba(99, 102, 241, 0.6);
-            box-shadow: var(--shadow-xl);
-        }
-        
-        .pinned-card.positive {
-            border-color: rgba(16, 185, 129, 0.4);
-        }
-        
-        .pinned-card.positive::before {
-            background: var(--gradient-secondary);
-        }
-        
-        .pinned-card.negative {
-            border-color: rgba(239, 68, 68, 0.4);
-        }
-        
-        .pinned-card.negative::before {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-        }
-        
-        .coin-icon-large {
-            width: 60px;
-            height: 60px;
-            margin: 0 auto var(--space-4);
-            background: var(--gradient-primary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2rem;
-            font-weight: bold;
-            color: white;
-        }
-        
-        .coin-symbol {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: var(--space-2);
-        }
-        
-        .coin-price {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: var(--space-2);
-        }
-        
-        .coin-change {
-            font-size: 1rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: var(--space-2);
-        }
-        
-        .coin-change.positive {
-            color: var(--secondary);
-        }
-        
-        .coin-change.negative {
-            color: var(--danger);
-        }
-        
-        .coin-volume {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            margin-top: var(--space-2);
-        }
-        
         @media (max-width: 1200px) {
             .dashboard-grid {
                 grid-template-columns: 1fr;
-            }
-            
-            .pinned-grid {
-                grid-template-columns: repeat(2, 1fr);
             }
         }
         
@@ -513,10 +397,6 @@
             .signals-grid {
                 grid-template-columns: 1fr;
             }
-            
-            .pinned-grid {
-                grid-template-columns: 1fr;
-            }
         }
     </style>
 </head>
@@ -529,18 +409,6 @@
                 <span>Dashboard</span>
                 <a href="/" style="margin-left: var(--space-4); font-size: 0.9rem; color: var(--text-secondary); text-decoration: none;">← Ana Sayfa</a>
             </div>
-                <!-- TA Modal -->
-                <div id="taModal" class="ta-modal hidden">
-                    <div class="ta-modal-content">
-                        <div class="ta-modal-header">
-                            <h3 id="taModalTitle">Teknik Analiz</h3>
-                            <button class="close-btn" onclick="closeTaModal()">✕</button>
-                        </div>
-                        <div id="taModalBody" class="ta-modal-body">
-                            Yükleniyor...
-                        </div>
-                    </div>
-                </div>
             <div class="dashboard-stats" id="dashboardStats">
                 <div class="stat-item">
                     <div class="stat-value" id="totalSignals">-</div>
@@ -596,25 +464,6 @@
             </div>
         </div>
 
-        <!-- Pinned Coins Section -->
-        <div class="pinned-section">
-            <div class="section-title">
-                <h2>
-                    <i data-lucide="star"></i>
-                    Öncelikli Pariteler
-                </h2>
-                <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                    Canlı fiyat & 24h değişim
-                </div>
-            </div>
-            <div class="pinned-grid" id="pinnedGrid">
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
-                    Veriler yükleniyor...
-                </div>
-            </div>
-        </div>
-
         <!-- Live Signals Section -->
         <div class="signals-section">
             <div class="section-title">
@@ -641,24 +490,13 @@
         lucide.createIcons();
 
         let signalsChart;
-        const seenSignalsList = new Set();
+        const seenSignals = new Set();
 
         // Dashboard data
         let dashboardData = {
             signals: [],
             stats: {},
-            pinned: [],
             lastUpdate: 0
-        };
-
-        // Pinned symbols
-        const PINNED_SYMBOLS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
-
-        // Coin icons mapping
-        const COIN_ICONS = {
-            'BTC-USDT': '₿',
-            'ETH-USDT': 'Ξ',
-            'SOL-USDT': '◎'
         };
 
         // Initialize chart
@@ -725,14 +563,6 @@
             return price.toFixed(6);
         }
 
-        // Format volume
-        function formatVolume(volume) {
-            if (volume >= 1e9) return (volume / 1e9).toFixed(1) + 'B';
-            if (volume >= 1e6) return (volume / 1e6).toFixed(1) + 'M';
-            if (volume >= 1e3) return (volume / 1e3).toFixed(1) + 'K';
-            return volume.toFixed(0);
-        }
-
         // Format time ago
         function timeAgo(timestamp) {
             const now = Date.now();
@@ -745,31 +575,11 @@
             return `${Math.floor(hours / 24)} gün önce`;
         }
 
-        // Create pinned card
-        function createPinnedCard(coin) {
-            const changeClass = coin.changeRate > 0 ? 'positive' : coin.changeRate < 0 ? 'negative' : 'neutral';
-            const changeIcon = coin.changeRate > 0 ? 'trending-up' : coin.changeRate < 0 ? 'trending-down' : 'minus';
-            const symbol = coin.symbol.replace('-USDT', '');
-            
-            return `
-                <div class="pinned-card ${changeClass}" ondblclick="openTaModal('${coin.symbol}')" title="Çift tıkla: Teknik analiz">
-                    <div class="coin-icon-large">${COIN_ICONS[coin.symbol] || symbol[0]}</div>
-                    <div class="coin-symbol">${symbol}</div>
-                    <div class="coin-price">$${formatPrice(coin.price)}</div>
-                    <div class="coin-change ${changeClass}">
-                        <i data-lucide="${changeIcon}"></i>
-                        ${coin.changeRate ? (coin.changeRate * 100).toFixed(2) + '%' : '0.00%'}
-                    </div>
-                    <div class="coin-volume">Vol: $${formatVolume(coin.volValue || 0)}</div>
-                </div>
-            `;
-        }
-
         // Create signal card
         function createSignalCard(signal) {
-            const isNew = !seenSignalsList.has(signal.symbol + signal.created_ts);
+            const isNew = !seenSignals.has(signal.symbol + signal.created_ts);
             if (isNew) {
-                seenSignalsList.add(signal.symbol + signal.created_ts);
+                seenSignals.add(signal.symbol + signal.created_ts);
             }
 
             return `
@@ -828,7 +638,7 @@
 
         // Update dashboard stats
         function updateStats(stats) {
-            document.getElementById('totalSignals').textContent = dashboardData.signals?.length || 0;
+            document.getElementById('totalSignals').textContent = stats.signals?.length || 0;
             document.getElementById('winRate').textContent = stats.perf_win_rate ? `%${Math.round(stats.perf_win_rate)}` : '-';
             document.getElementById('symbolsScanned').textContent = stats.symbols_scanned || '-';
             
@@ -868,163 +678,6 @@
                     </div>
                 `;
             }
-        }
-
-        // Load pinned data
-        async function loadPinnedData() {
-            console.log('Loading pinned data...');
-            try {
-                const response = await fetch('/api/pinned');
-                console.log('Pinned API response status:', response.status);
-                const result = await response.json();
-                console.log('Pinned API result:', result);
-                const data = result.data || [];
-                console.log('Pinned data array:', data);
-                renderPinnedCards(data);
-            } catch (error) {
-                console.error('Error loading pinned data:', error);
-                // Show placeholder cards if API fails
-                const placeholder = PINNED_SYMBOLS.map(symbol => ({
-                    symbol: symbol,
-                    price: 0,
-                    changeRate: 0,
-                    volValue: 0
-                }));
-                renderPinnedCards(placeholder);
-            }
-        }
-
-        // Render pinned cards
-        function renderPinnedCards(coins) {
-            console.log('Rendering pinned cards:', coins);
-            const container = document.getElementById('pinnedGrid');
-            console.log('Container found:', container);
-            if (!container) return;
-            
-            container.innerHTML = coins.map(coin => createPinnedCard(coin)).join('');
-            console.log('Pinned cards rendered, calling lucide.createIcons()');
-            lucide.createIcons();
-        }
-
-        // WebSocket connection for real-time updates
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-            // Backend endpoint is /ws/signals
-            const wsUrl = `${protocol}://${window.location.host}/ws/signals`;
-            
-            try {
-                const ws = new WebSocket(wsUrl);
-                
-                ws.onopen = function() {
-                    console.log('WebSocket connected');
-                };
-                
-                ws.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'bootstrap') {
-                            // Initial batch
-                            dashboardData.signals = data.data || [];
-                            renderSignals();
-                        } else if (data.type === 'signal') {
-                            // Single new signal push (backend sends {data: sig})
-                            const sig = data.data || data.signal;
-                            if (sig) {
-                                dashboardData.signals.unshift(sig);
-                                dashboardData.signals = dashboardData.signals.slice(0, 50);
-                                renderSignals();
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Error parsing WebSocket message:', e);
-                    }
-                };
-                
-                ws.onclose = function() {
-                    console.log('WebSocket disconnected, reconnecting in 5s...');
-                    setTimeout(connectWebSocket, 5000);
-                };
-                
-                ws.onerror = function(error) {
-                    console.error('WebSocket error:', error);
-                };
-                
-            } catch (error) {
-                console.error('Failed to connect WebSocket:', error);
-            }
-        }
-
-        // ---- TA MODAL ----
-        const TA_TIMEFRAMES = ["1m","5m","15m","1h","4h"];
-        let currentTaSymbol = null;
-
-        function closeTaModal(){
-            document.getElementById('taModal').classList.add('hidden');
-        }
-
-        async function openTaModal(symbol){
-            currentTaSymbol = symbol;
-            const modal = document.getElementById('taModal');
-            const body = document.getElementById('taModalBody');
-            const title = document.getElementById('taModalTitle');
-            title.textContent = symbol + ' Teknik Analiz';
-            body.innerHTML = 'Yükleniyor...';
-            modal.classList.remove('hidden');
-            try {
-                const res = await fetch(`/api/ta/${symbol}`);
-                const data = await res.json();
-                renderTaData(data);
-            } catch(e){
-                body.innerHTML = '<div style="color:var(--negative);">Hata: '+e+'</div>';
-            }
-        }
-
-        function renderTaData(data){
-            const body = document.getElementById('taModalBody');
-            if(!data || !data.timeframes){
-                body.innerHTML = 'Veri yok';
-                return;
-            }
-            const tfs = Object.keys(data.timeframes);
-            // Tabs
-            const tabs = tfs.map(tf => `<div class="tf-tab" data-tf="${tf}" onclick="selectTf('${tf}')">${tf}</div>`).join('');
-            body.innerHTML = `<div class="tf-tabs">${tabs}</div><div id="taTfContainer"></div>`;
-            selectTf(tfs[0]);
-        }
-
-        function formatMetric(v, digits=2){
-            if(v === null || v === undefined || isNaN(v)) return '-';
-            return Number(v).toFixed(digits);
-        }
-
-        function selectTf(tf){
-            document.querySelectorAll('.tf-tab').forEach(el=>{
-                el.classList.toggle('active', el.getAttribute('data-tf')===tf);
-            });
-            const dataEl = document.getElementById('taTfContainer');
-            if(!currentTaSymbol) return;
-            fetch(`/api/ta/${currentTaSymbol}`).then(r=>r.json()).then(all=>{
-                const d = all.timeframes[tf] || {};
-                if(d.error){
-                    dataEl.innerHTML = `<div style="color:var(--negative);">${d.error}</div>`;
-                    return;
-                }
-                dataEl.innerHTML = `
-                    <div class="ta-grid">
-                        <div class="ta-box"><h4>Fiyat</h4><div class="ta-metric">$${formatMetric(d.close,4)}</div><div class="ta-sub">Değişim ${formatMetric(d.change_pct,2)}%</div></div>
-                        <div class="ta-box"><h4>RSI(14)</h4><div class="ta-metric">${formatMetric(d.rsi14,2)}</div><div class="ta-sub">30/70 bölgeleri</div></div>
-                        <div class="ta-box"><h4>ATR(14)</h4><div class="ta-metric">${formatMetric(d.atr14,4)}</div><div class="ta-sub">Volatilite</div></div>
-                        <div class="ta-box"><h4>ADX(14)</h4><div class="ta-metric">${formatMetric(d.adx14,2)}</div><div class="ta-sub">Trend gücü</div></div>
-                        <div class="ta-box"><h4>EMA20</h4><div class="ta-metric">${formatMetric(d.ema20,4)}</div><div class="ta-sub">Kısa ortalama</div></div>
-                        <div class="ta-box"><h4>EMA50</h4><div class="ta-metric">${formatMetric(d.ema50,4)}</div><div class="ta-sub">Orta ortalama</div></div>
-                        <div class="ta-box"><h4>BB Poz</h4><div class="ta-metric">${formatMetric(d.bb_pos,2)}</div><div class="ta-sub">0 alt bant / 1 üst bant</div></div>
-                        <div class="ta-box"><h4>BB Width</h4><div class="ta-metric">${formatMetric(d.bb_width,4)}</div><div class="ta-sub">Bant genişliği</div></div>
-                        <div class="ta-box"><h4>Hacim</h4><div class="ta-metric">${formatVolume(d.vol||0)}</div><div class="ta-sub">Son mum</div></div>
-                    </div>
-                `;
-            }).catch(e=>{
-                dataEl.innerHTML = `<div style="color:var(--negative);">Hata: ${e}</div>`;
-            });
         }
 
         // Render signals
@@ -1092,16 +745,244 @@
         document.addEventListener('DOMContentLoaded', function() {
             initChart();
             loadDashboardData();
-            loadPinnedData();
-            connectWebSocket();
-            document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeTaModal(); });
             
             // Auto refresh every 30 seconds
-            setInterval(() => {
-                loadDashboardData();
-                loadPinnedData();
-            }, 30000);
+            setInterval(loadDashboardData, 30000);
         });
+    </script>
+</body>
+</html>
+<body>
+    <div class="topbar-dash">
+        <h2>📊 Dashboard</h2>
+        <div class="stats-line" id="statsLine">Yükleniyor...</div>
+        <a href="/" style="font-size:.65rem; color:#4ade80; text-decoration:none;">← Ana Sayfa</a>
+    </div>
+    <div class="cards-wrap">
+    <h3 style="margin:.2rem 0 .6rem;font-size:.75rem;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;display:flex;align-items:center;gap:.75rem;">Öncelikli Pariteler <span style='font-size:.6rem;color:#64748b;font-weight:400;'>Canlı fiyat & 24h değişim</span></h3>
+    <div id="pinned" class="cards-grid pinned-grid"></div>
+        <h3 style="margin:1.2rem 0 .6rem;font-size:.72rem;letter-spacing:1px;color:#64748b;text-transform:uppercase;">Canlı Sinyaller</h3>
+        <div id="cards" class="cards-grid"></div>
+    </div>
+    <script>
+        const cardsRoot = document.getElementById('cards');
+        const pinnedRoot = document.getElementById('pinned');
+        const statsLine = document.getElementById('statsLine');
+        const maxCards = 300;
+        const PINNED = ['BTC-USDT','ETH-USDT','SOL-USDT'];
+        const pinnedState = {}; // symbol -> element
+        const seenSignals = new Set(); // duplicate önleme (symbol|ts)
+
+        function fmtDyn(p){
+            if(p >= 1000) return p.toFixed(2);
+            if(p >= 100) return p.toFixed(2);
+            if(p >= 10) return p.toFixed(3);
+            if(p >= 1) return p.toFixed(4);
+            if(p >= 0.1) return p.toFixed(5);
+            if(p >= 0.01) return p.toFixed(6);
+            return p.toFixed(7);
+        }
+
+        function fmtPct(v){
+            if(v===null||v===undefined) return '-';
+            const p=(v*100).toFixed(2);
+            return (v>0?'+':'')+p+'%';
+        }
+
+        function compact(n){
+            if(!n) return '-';
+            if(n>1e9) return (n/1e9).toFixed(2)+'B';
+            if(n>1e6) return (n/1e6).toFixed(2)+'M';
+            if(n>1e3) return (n/1e3).toFixed(2)+'K';
+            return n.toFixed(0);
+        }
+
+    function createPinnedSkeleton(sym){
+            const div = document.createElement('div');
+            div.className = 'signal-card pinned';
+            div.dataset.symbol = sym;
+            div.innerHTML = `
+                <div class='card-header'>
+                    <span class='sym'>${sym}</span>
+                    <span class='side neutral'>-</span>
+                    <span class='score'>S:-</span>
+                </div>
+                <div class='metrics-row' style='display:flex;gap:.4rem;font-size:.55rem;flex-wrap:wrap;'>
+                    <span class='price' style='color:#e2e8f0;'>₿ -</span>
+                    <span class='chg neutral'>Δ -</span>
+                    <span class='vol' style='opacity:.8;'>Vol -</span>
+                </div>
+                <canvas class='spark' height='30' style='width:100%;height:30px;'></canvas>
+                <div class='levels'>
+                    <div><label>Entry</label><b>-</b></div>
+                    <div><label>SL</label><b>-</b></div>
+                    <div><label>TP1</label><b>-</b></div>
+                    <div><label>TP2</label><b>-</b></div>
+                    <div><label>TP3</label><b>-</b></div>
+                </div>
+                <div class='meta'><span>Bekleniyor...</span><span>-</span></div>
+                <div class='reason'>Henüz sinyal yok</div>`;
+            pinnedRoot.appendChild(div);
+            pinnedState[sym] = div;
+        }
+
+        PINNED.forEach(createPinnedSkeleton);
+
+    function pct(x){ if(x==null) return '-'; return (x*100).toFixed(1)+'%'; }
+
+    function updatePinned(sig){
+            const el = pinnedState[sig.symbol];
+            if(!el) return false;
+            el.className = 'signal-card pinned '+sig.side;
+            el.querySelector('.side').textContent = sig.side;
+            el.querySelector('.side').className = 'side '+sig.side;
+            el.querySelector('.score').textContent = 'S:'+parseInt(sig.score);
+            const levelBoxes = el.querySelectorAll('.levels div b');
+            levelBoxes[0].textContent = sig.entry.toFixed(6);
+            levelBoxes[1].textContent = sig.sl.toFixed(6);
+            levelBoxes[2].textContent = sig.tp1.toFixed(6);
+            levelBoxes[3].textContent = sig.tp2.toFixed(6);
+            levelBoxes[4].textContent = sig.tp3.toFixed(6);
+            const dt = new Date(sig.ts*1000).toLocaleTimeString();
+            const metaSpans = el.querySelectorAll('.meta span');
+            if(metaSpans.length>=2){
+                metaSpans[0].textContent = sig.regime;
+                metaSpans[1].textContent = dt;
+            }
+            const reasonDiv = el.querySelector('.reason');
+            reasonDiv.textContent = sig.reason;
+            reasonDiv.title = sig.reason;
+            // Probability badge ekle (yoksa)
+            if(sig.prob != null){
+                let badge = el.querySelector('.prob');
+                if(!badge){
+                    badge = document.createElement('div');
+                    badge.className='prob';
+                    badge.style.cssText='position:absolute;top:6px;right:6px;font-size:.55rem;padding:2px 6px;border-radius:14px;background:#27313d;color:#93c5fd;font-weight:500;';
+                    el.appendChild(badge);
+                }
+                badge.textContent='P:'+pct(sig.prob);
+            }
+            return true;
+        }
+
+    function addCard(sig){
+        const key = sig.symbol + '|' + sig.ts;
+        if(seenSignals.has(key)) return; // duplicate engelle
+        seenSignals.add(key);
+            // Öncelikli kart ise güncelle ve çık
+            if(updatePinned(sig)) return;
+            const dt = new Date(sig.ts*1000).toLocaleTimeString();
+            const div = document.createElement('div');
+        div.className = 'signal-card '+sig.side+' new';
+            const probBadge = sig.prob!=null?`<span class='prob-badge'>P:${pct(sig.prob)}</span>`:'';
+            div.innerHTML = `
+                <div class='card-header'>
+                    <span class='sym'>${sig.symbol}</span>
+                    <span class='side ${sig.side}' title='Yön'>${sig.side}</span>
+                    <span class='score' title='Skor'>S:${parseInt(sig.score)}</span>
+                    ${probBadge}
+                </div>
+                <div class='levels'>
+            <div><label>Entry</label><b>${fmtDyn(sig.entry)}</b></div>
+            <div><label>SL</label><b>${fmtDyn(sig.sl)}</b></div>
+            <div><label>TP1</label><b>${fmtDyn(sig.tp1)}</b></div>
+            <div><label>TP2</label><b>${fmtDyn(sig.tp2)}</b></div>
+            <div><label>TP3</label><b>${fmtDyn(sig.tp3)}</b></div>
+                </div>
+                <div class='meta'>
+                    <span>${sig.regime}</span><span>${dt}</span>
+                </div>
+                <div class='reason' title='${sig.reason}'>${sig.reason}</div>`;
+            cardsRoot.prepend(div);
+            while(cardsRoot.children.length>maxCards){cardsRoot.removeChild(cardsRoot.lastChild);}
+        setTimeout(()=>div.classList.remove('new'),1200);
+        }
+
+        async function bootstrap(){
+            await refreshPinnedMetrics(); // artık sinyalleri websocket bootstrap'tan alıyoruz (duplicate yok)
+        }
+
+        async function refreshPinnedMetrics(){
+            try {
+                const r = await fetch('/api/pinned');
+                const j = await r.json();
+                (j.data||[]).forEach(row => {
+                    const el = pinnedState[row.symbol];
+                    if(!el) return;
+                    const priceEl = el.querySelector('.price');
+                    const chgEl = el.querySelector('.chg');
+                    const volEl = el.querySelector('.vol');
+                    if(priceEl) priceEl.textContent = row.price ? '$'+Number(row.price).toFixed(2) : '-';
+                    if(chgEl){
+                        const v=row.changeRate; // already fraction
+                        chgEl.textContent = 'Δ '+fmtPct(v);
+                        chgEl.className = 'chg '+(v>0?'pos':v<0?'neg':'neutral');
+                    }
+                    if(volEl) volEl.textContent = 'Vol '+(row.volValue?compact(row.volValue):'-');
+                    // sparkline update (kaydırmalı mini seri)
+                    const canvas = el.querySelector('canvas.spark');
+                    if(canvas && row.price){
+                        const arr = canvas._data || [];
+                        arr.push(row.price);
+                        if(arr.length>40) arr.shift();
+                        canvas._data = arr;
+                        drawSpark(canvas, arr);
+                    }
+                });
+            } catch(e){ console.warn('Pinned metrics error', e); }
+        }
+        setInterval(refreshPinnedMetrics, 15000);
+
+        async function refreshStats(){
+            const r = await fetch('/api/stats');
+            const j = await r.json();
+            statsLine.textContent = `Sembol:${j.symbols_scanned} Mode:${j.mode} Sleep:${j.sleep}s`;
+        }
+        setInterval(refreshStats, 10000);
+
+        function connect(){
+            const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/signals');
+            ws.onmessage = ev => {
+                const msg = JSON.parse(ev.data);
+                if(msg.type==='bootstrap') {
+                    msg.data.forEach(addCard);
+                } else if(msg.type==='signal') {
+                    addCard(msg.data);
+                }
+            };
+            ws.onclose = ()=>setTimeout(connect, 3000);
+        }
+
+        bootstrap();
+        refreshStats();
+        connect();
+
+        function drawSpark(cv, data){
+            const ctx = cv.getContext('2d');
+            const w = cv.width = cv.clientWidth;
+            const h = cv.height = cv.clientHeight;
+            ctx.clearRect(0,0,w,h);
+            if(data.length<2) return;
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = (max-min)||1;
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            data.forEach((v,i)=>{
+                const x = i/(data.length-1)*w;
+                const y = h - ( (v-min)/range * h );
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            });
+            ctx.stroke();
+            // gradient fill
+            const grd = ctx.createLinearGradient(0,0,0,h);
+            grd.addColorStop(0,'#3b82f680');
+            grd.addColorStop(1,'#3b82f600');
+            ctx.fillStyle = grd;
+            ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fill();
+        }
     </script>
 </body>
 </html>

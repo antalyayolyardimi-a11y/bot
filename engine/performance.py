@@ -37,13 +37,13 @@ class PerformanceTracker:
         self.engine = engine
         self.records: List[SignalRecord] = []
         self._task: Optional[asyncio.Task] = None
-        # Adaptif parametreler
+        # Adaptif parametreler - daha konservatif başlangıç
         self.dynamic_min_score: Optional[int] = None
-        self._atr_mult: float = 1.2
+        self._atr_mult: float = 1.5  # 1.2'den 1.5'e çıkardım, daha geniş SL
         self._lock = asyncio.Lock()
         # Değerlendirme aralığı
-        self.eval_interval = 60  # saniye
-        self.signal_ttl = 60 * 90  # 90 dakika sonra kapat (EXPIRED) (MVP)
+        self.eval_interval = 30  # 60'dan 30'a düşürdüm, daha sık kontrol
+        self.signal_ttl = 60 * 120  # 90'dan 120 dakikaya çıkardım, daha uzun süre bekle
 
     # --------- Public ---------
     def get_atr_mult(self) -> float:
@@ -71,24 +71,40 @@ class PerformanceTracker:
         self.records.append(r)
 
     def get_stats(self) -> Dict[str, float]:
-        closed = [r for r in self.records if r.status != "OPEN"]
-        win = [r for r in closed if r.status in ("TP1", "TP2", "TP3")]
-        stop = [r for r in closed if r.status == "STOP"]
-        avg_r = None
-        rs = [r.realized_r for r in closed if r.realized_r is not None]
-        if rs:
-            avg_r = sum(rs) / len(rs)
+        closed = [r for r in self.records if r.status not in ("OPEN",)]
+        if not closed:
+            return {"total": 0, "open": len([r for r in self.records if r.status == "OPEN"])}
+            
+        # Genel istatistikler
+        total = len(closed)
+        wins = [r for r in closed if r.status in ("TP1", "TP2", "TP3")]
+        stops = [r for r in closed if r.status == "STOP"]
+        expired = [r for r in closed if r.status == "EXPIRED"]
+        
+        win_rate = len(wins) / total if total > 0 else 0
+        stop_rate = len(stops) / total if total > 0 else 0
+        expire_rate = len(expired) / total if total > 0 else 0
+        
+        # Ortalama R değerleri
+        avg_win_r = sum([r.realized_r for r in wins]) / len(wins) if wins else 0
+        avg_loss_r = sum([abs(r.realized_r) for r in stops]) / len(stops) if stops else 0
+        
+        # Son 20 sinyal performansı
+        recent = closed[-20:] if len(closed) >= 20 else closed
+        recent_wins = [r for r in recent if r.status in ("TP1", "TP2", "TP3")]
+        recent_win_rate = len(recent_wins) / len(recent) if recent else 0
+        
         return {
-            "total": len(self.records),
+            "total": total,
             "open": len([r for r in self.records if r.status == "OPEN"]),
-            "closed": len(closed),
-            "wins": len(win),
-            "stops": len(stop),
-            "win_rate": round(len(win)/len(closed), 4) if closed else None,
-            "stop_rate": round(len(stop)/len(closed), 4) if closed else None,
-            "avg_r": round(avg_r, 4) if avg_r is not None else None,
-            "dyn_min_score": self.dynamic_min_score,
-            "atr_mult": round(self._atr_mult, 3),
+            "win_rate": round(win_rate * 100, 1),
+            "stop_rate": round(stop_rate * 100, 1),
+            "expire_rate": round(expire_rate * 100, 1),
+            "avg_win_r": round(avg_win_r, 2),
+            "avg_loss_r": round(avg_loss_r, 2),
+            "recent_win_rate": round(recent_win_rate * 100, 1),
+            "atr_mult": self._atr_mult,
+            "dynamic_min_score": self.dynamic_min_score or self.engine.min_score
         }
 
     # --------- Internal Loop ---------
@@ -159,33 +175,51 @@ class PerformanceTracker:
 
     async def _adaptive_update(self):
         closed = [r for r in self.records if r.status != "OPEN"]
-        if len(closed) < 8:  # yeterli veri yok
+        if len(closed) < 5:  # daha az veri ile de çalışsın
             return
-        recent = closed[-30:]
+        recent = closed[-20:]  # son 20 sinyal
         wins = [r for r in recent if r.status in ("TP1", "TP2", "TP3")]
         stops = [r for r in recent if r.status == "STOP"]
         win_rate = len(wins)/len(recent) if recent else 0.0
         stop_rate = len(stops)/len(recent) if recent else 0.0
 
-        # MIN_SCORE adaptasyonu
+        print(f"[ADAPT] Analyzing {len(recent)} recent signals: wins={len(wins)}, stops={len(stops)}, win_rate={win_rate:.2f}, stop_rate={stop_rate:.2f}")
+
+        # MIN_SCORE adaptasyonu (daha agresif)
         base_min = self.engine.min_score
         new_min = base_min
-        if win_rate < 0.45 and base_min < 75:
+        
+        # Stop rate yüksekse minimum skoru artır (daha seçici ol)
+        if stop_rate > 0.60 and base_min < 80:
+            new_min = base_min + 3
+        elif stop_rate > 0.45 and base_min < 70:
             new_min = base_min + 2
-        elif win_rate > 0.60 and base_min > 40:
+        # Win rate yüksekse minimum skoru azalt (daha fazla sinyal al)
+        elif win_rate > 0.65 and base_min > 35:
+            new_min = base_min - 2
+        elif win_rate > 0.55 and base_min > 40:
             new_min = base_min - 1
+            
         if new_min != base_min:
             self.engine.min_score = new_min
             self.dynamic_min_score = new_min
-            print(f"[ADAPT] MIN_SCORE {base_min} -> {new_min} (win_rate={win_rate:.2f})")
+            print(f"[ADAPT] MIN_SCORE {base_min} -> {new_min} (win_rate={win_rate:.2f}, stop_rate={stop_rate:.2f})")
 
-        # ATR multiplier adaptasyonu
+        # ATR multiplier adaptasyonu (daha agresif)
         atr_old = self._atr_mult
         atr_new = atr_old
-        if stop_rate > 0.55 and atr_old < 1.8:
+        
+        # Stop rate çok yüksekse SL'ları genişlet
+        if stop_rate > 0.65 and atr_old < 2.0:
+            atr_new = round(atr_old + 0.1, 2)
+        elif stop_rate > 0.50 and atr_old < 1.8:
             atr_new = round(atr_old + 0.05, 2)
-        elif stop_rate < 0.30 and atr_old > 0.8:
+        # Stop rate düşükse SL'ları daralt 
+        elif stop_rate < 0.25 and atr_old > 0.9:
             atr_new = round(atr_old - 0.05, 2)
+        elif stop_rate < 0.35 and atr_old > 1.0:
+            atr_new = round(atr_old - 0.03, 2)
+            
         if atr_new != atr_old:
             self._atr_mult = atr_new
             print(f"[ADAPT] ATR_MULT {atr_old} -> {atr_new} (stop_rate={stop_rate:.2f})")
@@ -198,8 +232,15 @@ class PerformanceTracker:
         closed = [r for r in self.records if r.status not in ("OPEN",)]
         if not closed:
             return
-        batch = closed[-15:]
-        for r in batch:
+        
+        # Öğrenmemiş kayıtları bul (yeni kapanan sinyaller)
+        unlearned = [r for r in closed if not hasattr(r, '_learned')]
+        if not unlearned:
+            return
+            
+        print(f"[LEARNER] Processing {len(unlearned)} new closed signals for learning...")
+        
+        for r in unlearned:
             if r.realized_r is None:
                 continue
             # Label: STOP ->0, TP1 ->0.6, TP2 ->0.8, TP3 ->1.0, EXPIRED ->0.3
@@ -208,7 +249,12 @@ class PerformanceTracker:
             if label is None:
                 continue
             feats = self._extract_features(r)
-            learner.update(feats, label)
+            old_prob = learner.predict_proba(feats)
+            new_prob = learner.update(feats, label)
+            
+            # Öğrenme işlemini logla
+            print(f"[LEARNER] {r.symbol} {r.side} {r.status}: prob {old_prob:.3f}->{new_prob:.3f}, features: {feats}")
+            r._learned = True  # Bu kayıt öğrenildi olarak işaretle
 
     def _extract_features(self, r: SignalRecord) -> Dict[str, float]:
         # Basit özellikler: skor, R genişliği, side, regime
